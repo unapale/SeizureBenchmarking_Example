@@ -1,6 +1,6 @@
 from loadEeg.loadEdf import *
 from parametersSetup import *
-from VariousFunctionsLib_Una import  *
+from VariousFunctionsLib import  *
 from evaluate.evaluate import *
 import os
 
@@ -79,7 +79,7 @@ os.makedirs(os.path.dirname(TrueAnnotationsFile), exist_ok=True)
 
 # #####################################################
 # # EXTRACT FEATURES AND SAVE TO FILES - Only has to be done once
-# calculateFeaturesForAllFiles(outDir, outDirFeatures, DatasetPreprocessParams, FeaturesParams, outFormat ='parquet.gzip' )
+calculateFeaturesForAllFiles(outDir, outDirFeatures, DatasetPreprocessParams, FeaturesParams, outFormat ='parquet.gzip' )
 
 # # CALCULATE KL DIVERGENCE OF FEATURES
 # GeneralParams.patients = [ f.name for f in os.scandir(outDir) if f.is_dir() ]
