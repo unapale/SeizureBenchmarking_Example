@@ -1,6 +1,6 @@
 # SeizureBenchmarking_Example
 
-Example for validating ML algorithms using https://github.com/esl-epfl/sz-validation-framework framework
+Example for validating ML algorithms using [framework](https://github.com/esl-epfl/sz-validation-framework). All description of the framework is on https://eslweb.epfl.ch/epilepsybenchmarks/.
 
 ### Datasets supported 
 Possible to use CHBMIT, Siena and SeizIT dataset. 
