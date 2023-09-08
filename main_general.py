@@ -11,13 +11,13 @@ rootDir=  '../../../../../scratch/dan/physionet.org/files/siena-scalp-eeg/1.0.0'
 rootDir=  '../../../../../shares/eslfiler1/scratch/dan/physionet.org/files/siena-scalp-eeg/1.0.0' #when running from remote desktop
 DatasetPreprocessParams.channelNamesToKeep=DatasetPreprocessParams.channelNamesToKeep_Unipolar
 
-# # SEIZIT DATASET
-# dataset='SeizIT1'
-# # rootDir=  '../../../../../databases/medical/ku-leuven/SeizeIT1/v1_0' #when running from putty
+# SEIZIT DATASET
+dataset='SeizIT1'
+rootDir=  '../../../../../databases/medical/ku-leuven/SeizeIT1/v1_0' #when running from putty
 # rootDir=  '../../../../../shares/eslfiler1/databases/medical/ku-leuven/SeizeIT1/v1_0' #when running from remote desktop
-# DatasetPreprocessParams.channelNamesToKeep=DatasetPreprocessParams.channelNamesToKeep_Unipolar
+DatasetPreprocessParams.channelNamesToKeep=DatasetPreprocessParams.channelNamesToKeep_Unipolar
 
-#CHBMIT DATASET
+# # CHBMIT DATASET
 # dataset='CHBMIT'
 # rootDir=  '../../../../../scratch/dan/physionet.org/files/chbmit/1.0.0' #when running from putty
 # rootDir=  '../../../../../shares/eslfiler1/scratch/dan/physionet.org/files/chbmit/1.0.0' #when running from remote desktop
@@ -27,22 +27,30 @@ DatasetPreprocessParams.channelNamesToKeep=DatasetPreprocessParams.channelNamesT
 # SET DIFFERENT PARAMETERS
 # Set features to use (it will be in the ouput folder name)
 FeaturesParams.featNames = np.array( ['ZeroCross'])
-# FeaturesParams.featNames = np.array( ['MeanAmpl', 'LineLength'])
+FeaturesParams.featNames = np.array( ['MeanAmpl', 'LineLength'])
 # FeaturesParams.featNames = np.array( ['MeanAmpl', 'LineLength','Frequency'])
-# FeaturesParams.featNames = np.array( ['MeanAmpl', 'LineLength','Frequency','ZeroCross'])
+FeaturesParams.featNames = np.array( ['MeanAmpl', 'LineLength','Frequency','ZeroCross'])
 # FeaturesParams.featNames = np.array( ['ZeroCrossAbs'])
 FeaturesParams.featSetNames= FeaturesParams.featNames
 
 #####################################################
 # CREATE FOLDER NAMES
+appendix='_NewNormalization' #if needed
 # Output folder for standardized dataset
 outDir= '../../../10_datasets/'+ dataset+ '_Standardized'
 os.makedirs(os.path.dirname(outDir), exist_ok=True)
-# Output folder with calculated features
-outDirFeatures= '../../../10_datasets/'+ dataset+ '_Features'
+# Output folder with calculated features and  ML model predictions
+if (DatasetPreprocessParams.eegDataNormalization==''):
+    outDirFeatures = '../../../10_datasets/' + dataset + '_Features/'
+    outPredictionsFolder = '../../../10_datasets/' + dataset + '_TrainingResults' +'_'+StandardMLParams.trainingDataResampling +'_'+ str(StandardMLParams.traininDataResamplingRatio)+'/01_General_' + StandardMLParams.modelType + '_WinStep[' + str(
+        FeaturesParams.winLen) + ',' + str(FeaturesParams.winStep) + ']_' + '-'.join(
+        FeaturesParams.featNames) + appendix+ '/'
+else:
+    outDirFeatures= '../../../10_datasets/'+ dataset+ '_Features_'+DatasetPreprocessParams.eegDataNormalization+'/'
+    outPredictionsFolder = '../../../10_datasets/' + dataset + '_TrainingResults_' + DatasetPreprocessParams.eegDataNormalization +'_'+StandardMLParams.trainingDataResampling+'_'+ str(StandardMLParams.traininDataResamplingRatio)+ '/01_General_' + StandardMLParams.modelType + '_WinStep[' + str(
+        FeaturesParams.winLen) + ',' + str(FeaturesParams.winStep) + ']_' + '-'.join(
+        FeaturesParams.featNames) + appendix+ '/'
 os.makedirs(os.path.dirname(outDirFeatures), exist_ok=True)
-# Output folder for ML model predictions
-outPredictionsFolder = '../../../10_datasets/' + dataset + '_TrainingResults/01_General_'+StandardMLParams.modelType+'_WinStep['+str(FeaturesParams.winLen)+','+str(FeaturesParams.winStep)+']_'+'-'.join(FeaturesParams.featNames)+'/'
 os.makedirs(os.path.dirname(outPredictionsFolder), exist_ok=True)
 
 # testing that folders are correct
@@ -51,10 +59,12 @@ os.makedirs(os.path.dirname(outPredictionsFolder), exist_ok=True)
 
 #####################################################
 # STANDARTIZE DATASET - Only has to be done once
-
+# print('STANDARDIZING DATASET')
 # # .edf as output
-# standardizeDataset(rootDir, outDir) #for all datasets that are unipolar (SeizIT and Siena)
-# standardizeDataset(rootDir, outDir,  origMontage='bipolar-dBanana') #for CHBMIT
+# if (dataset=='CHBMIT'):
+#     standardizeDataset(rootDir, outDir, origMontage='bipolar-dBanana')  # for CHBMIT
+# else:
+#     standardizeDataset(rootDir, outDir) #for all datasets that are unipolar (SeizIT and Siena)
 
 #if we want to change output format
 # standardizeDataset(rootDir, outDir, outFormat='csv')
@@ -67,7 +77,7 @@ if (dataset=='CHBMIT'):
 elif (dataset == 'SIENA'):
     from loadAnnotations.sienaAnnotationConverter import *
 elif (dataset=='SeizIT1'):
-    from loadAnnotations.sienaAnnotationConverter import *
+    from loadAnnotations.seizeitAnnotationConverter import *
 
 TrueAnnotationsFile = outDir + '/' + dataset + 'AnnotationsTrue.csv'
 os.makedirs(os.path.dirname(TrueAnnotationsFile), exist_ok=True)
@@ -75,8 +85,8 @@ os.makedirs(os.path.dirname(TrueAnnotationsFile), exist_ok=True)
 
 # #####################################################
 # # EXTRACT FEATURES AND SAVE TO FILES - Only has to be done once
-# calculateFeaturesForAllFiles(outDir, outDirFeatures, DatasetPreprocessParams, FeaturesParams, outFormat ='parquet.gzip' )
-
+# calculateFeaturesForAllFiles(outDir, outDirFeatures, DatasetPreprocessParams, FeaturesParams, DatasetPreprocessParams.eegDataNormalization, outFormat ='parquet.gzip' )
+#
 # # CALCULATE KL DIVERGENCE OF FEATURES
 # GeneralParams.patients = [ f.name for f in os.scandir(outDir) if f.is_dir() ]
 # GeneralParams.patients.sort() #Sorting them
@@ -108,9 +118,9 @@ for patIndx, pat in enumerate(GeneralParams.patients):
 
     #normalize data
     if (FeaturesParams.featNorm == 'Norm'):
-        testDataFeatures= normalizeData(testDataFeatures)
-        trainDataFeatures = normalizeData(trainDataFeatures)
-        # (trainDataFeatures, testDataFeatures) = normalizeTrainAndTestData(trainDataFeatures, testDataFeatures)
+        # testDataFeatures= normalizeData(testDataFeatures)
+        # trainDataFeatures = normalizeData(trainDataFeatures)
+        (trainDataFeatures, testDataFeatures) = normalizeTrainAndTestData(trainDataFeatures, testDataFeatures)
         trainDataFeatures=removeExtremeValues(trainDataFeatures)
         testDataFeatures=removeExtremeValues(testDataFeatures)
         #remove useless feature columns
@@ -122,7 +132,14 @@ for patIndx, pat in enumerate(GeneralParams.patients):
         testDataFeatures=testDataFeatures.drop(labels=colsToDrop, axis='columns')
 
     ## STANDARD ML LEARNING
-    MLstdModel = train_StandardML_moreModelsPossible(trainDataFeatures.to_numpy(), trainData['Labels'].to_numpy(), StandardMLParams)
+    if (StandardMLParams.trainingDataResampling != 'NoResampling'):
+        (Xtrain, ytrain) = datasetResample(trainDataFeatures.to_numpy(), trainData['Labels'].to_numpy(),
+                                           StandardMLParams.trainingDataResampling,
+                                           StandardMLParams.traininDataResamplingRatio, randState=42)
+    else:
+        Xtrain = trainDataFeatures.to_numpy()
+        ytrain = trainData['Labels'].to_numpy()
+    MLstdModel = train_StandardML_moreModelsPossible(Xtrain, ytrain, StandardMLParams)
     # MLstdModel = train_StandardML_moreModelsPossible(testDataFeatures.to_numpy(), testData['Labels'].to_numpy(), StandardMLParams)
     # testing
     (predLabels_test, probabLab_test, acc_test, accPerClass_test) = test_StandardML_moreModelsPossible(testDataFeatures.to_numpy(), testData['Labels'].to_numpy(),MLstdModel)
@@ -183,7 +200,7 @@ PerformancePerFileName = outPredictionsFolder + '/' + dataset + 'PerformancePerF
 performancePerFile.sort_values(by=['filepath']).to_csv(PerformancePerFileName, index=False)
 
 # Calculate performance per subject
-GeneralParams.patients = [ f.name for f in os.scandir(outDirFeatures) if f.is_dir() ]
+GeneralParams.patients = [ f.name for f in os.scandir(outDir) if f.is_dir() ]
 GeneralParams.patients.sort() #Sorting them
 performacePerSubj= recalculatePerfPerSubject(performancePerFile, GeneralParams.patients, labelFreq, paramsPerformance)
 PerformancePerSubjName = outPredictionsFolder + '/' + dataset + 'PerformancePerSubj.csv'
