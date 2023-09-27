@@ -291,8 +291,47 @@ def createTimeStamps(fileStartTime, samplFreq, lenfile, winLen, stepLen):
         timeStamps.append(fileStartTime + datetime.timedelta(seconds=i))
     return timeStamps
 
+def normalizeWithPercentile(data, perc=0.99):
+    if perc>1:
+        perc=perc/100
+    posThr=data.quantile(q=perc, axis=0)
+    negdata=-data
+    negThr= - negdata.quantile(q=perc, axis=0)
+    dataOut = (data - negThr)/ (posThr - negThr)
+    dataOut[dataOut < 0] = 0
+    dataOut[dataOut > 1] = 1
+    # data.describe()
+    # dataOut.describe()
+    return dataOut
 
-def calculateFeaturesForAllFiles(folderIn, folderOut, DatasetPreprocessParams, FeaturesParams, outFormat ='parquet.gzip' ):
+def QuantileNormalization(df):
+    """
+    input: dataframe with numerical columns
+    output: dataframe with quantile normalized values
+    """
+    df_sorted = pd.DataFrame(np.sort(df.values,
+                                     axis=0),
+                             index=df.index,
+                             columns=df.columns)
+    df_mean = df_sorted.mean(axis=1)
+    df_mean.index = np.arange(1, len(df_mean) + 1)
+    df_qn =df.rank(method="min").stack().astype(int).map(df_mean).unstack()
+    return(df_qn)
+
+def plotDensityPlotOfData(data, nameOut):
+    import seaborn as sns
+    plt.clf()
+    for col in data.columns:
+        # Draw the density plot
+        sns.distplot(data[col], hist=False, kde=True, kde_kws={'linewidth': 3},  label=col)
+    # Plot formatting
+    plt.legend(data.columns)
+    plt.title('Density Plot')
+    plt.xlabel('EEG values')
+    # plt.ylabel('Density')
+    plt.savefig(nameOut)
+
+def calculateFeaturesForAllFiles(folderIn, folderOut, DatasetPreprocessParams, FeaturesParams, dataNorm, outFormat ='parquet.gzip' ):
     ''' Loads one by one file, filters data and calculates different features, each of them in individual files so that
     later they can be easier chosen and combined
     Args:
@@ -308,6 +347,13 @@ def calculateFeaturesForAllFiles(folderIn, folderOut, DatasetPreprocessParams, F
     for edfFile in edfFiles:
         print(edfFile)
         eegDataDF, samplFreq , fileStartTime= readEdfFile(edfFile)  # Load data
+        # plotDensityPlotOfData(eegDataDF, folderOut+'/EEGDensity_RawData.png')
+        if (dataNorm=='NormWithPercentile'):
+            eegDataDF= normalizeWithPercentile(eegDataDF, 0.99)
+            # plotDensityPlotOfData(eegDataDF, folderOut + '/EEGDensity_'+dataNorm+'.png')
+        elif (dataNorm=='QuantileNormalization'):
+            eegDataDF= QuantileNormalization(eegDataDF)
+            # plotDensityPlotOfData(eegDataDF, folderOut + '/EEGDensity_'+dataNorm+'.png')
         # Create time stamps for each sample
         timeStamps= createTimeStamps(fileStartTime, samplFreq, eegDataDF.shape[0], FeaturesParams.winLen, FeaturesParams.winStep)
 
@@ -381,55 +427,55 @@ def saveDataToFile( data,  outputName, type):
 #     return (dataOut, startIndxOfFiles)
 
 
-# def concatenateDataFromFiles_oldFeatures(fileNames, labelsFile):
-#     ''' loads and concatenates data from all files in file name list
-#     creates array noting lengths of each file to know when new file started in appeded data'''
-#     annotations_df = readDataFromFile(labelsFile)
-#     filesList=annotations_df.filepath.to_list()
-#
-#     startIndxOfFiles=[]
-#     for f, fileName in enumerate(fileNames):
-#         # Create names to match files
-#         dir=os.path.dirname(fileName).split('/')[-1]
-#         fn=os.path.basename(fileName).split('.')[0]
-#         fn2 = fn.split('_')[0]+'_'+fn.split('_')[1]
-#         filePathLabels=fn2+'_Labels.parquet.gzip'
-#         # filePathToSearch=dir+'/'+fn+'.edf'
-#         # indx=np.array(filesList.index(filePathToSearch)).reshape((1,-1))
-#
-#         # Read data
-#         data_df = readDataFromFile(fileName)
-#         try:
-#             labels_df= readDataFromFile(os.path.dirname(fileName)+'/'+filePathLabels)
-#         except:
-#             filePathLabels = fn2 + '_s_Labels.parquet.gzip'
-#             labels_df = readDataFromFile(os.path.dirname(fileName) + '/' + filePathLabels)
-#         labels=labels_df.to_numpy().squeeze()
-#
-#
-#         #Concatenate all files
-#         if (f==0):
-#             dataOut=data_df
-#             # startIndxOfFiles.append(data_df.shape[0])
-#             labelsOut=labels
-#             subjOut=['chb'+fn2[4:6]] * data_df.shape[0]
-#             fileOut = [fn2] * data_df.shape[0]
-#         else:
-#             dataOut = pd.concat([dataOut, data_df])
-#             # startIndxOfFiles.append(startIndxOfFiles[-1]+ data_df.shape[0])
-#             labelsOut=np.concatenate((labelsOut, labels), axis=0)
-#             subjOut = np.concatenate((subjOut, ['chb'+fn2[4:6]] * data_df.shape[0]), axis=0)
-#             fileOut = np.concatenate((fileOut, [fn2] * data_df.shape[0]), axis=0)
-#
-#     #add Labels column to dataframe
-#     dataOut.insert(0,'Labels',labelsOut.astype(int))
-#     # add subject
-#     dataOut.insert(0, 'Subject', subjOut)
-#     dataOut.insert(1, 'FileName', fileOut)
-#
-#     #remove every 2nt row beceause here step was 0.5Hz
-#     dataOut=dataOut.iloc[::2, :]
-#     return (dataOut)
+def concatenateDataFromFiles_oldFeatures(fileNames, labelsFile):
+    ''' loads and concatenates data from all files in file name list
+    creates array noting lengths of each file to know when new file started in appeded data'''
+    annotations_df = readDataFromFile(labelsFile)
+    filesList=annotations_df.filepath.to_list()
+
+    startIndxOfFiles=[]
+    for f, fileName in enumerate(fileNames):
+        # Create names to match files
+        dir=os.path.dirname(fileName).split('/')[-1]
+        fn=os.path.basename(fileName).split('.')[0]
+        fn2 = fn.split('_')[0]+'_'+fn.split('_')[1]
+        filePathLabels=fn2+'_Labels.parquet.gzip'
+        # filePathToSearch=dir+'/'+fn+'.edf'
+        # indx=np.array(filesList.index(filePathToSearch)).reshape((1,-1))
+
+        # Read data
+        data_df = readDataFromFile(fileName)
+        try:
+            labels_df= readDataFromFile(os.path.dirname(fileName)+'/'+filePathLabels)
+        except:
+            filePathLabels = fn2 + '_s_Labels.parquet.gzip'
+            labels_df = readDataFromFile(os.path.dirname(fileName) + '/' + filePathLabels)
+        labels=labels_df.to_numpy().squeeze()
+
+
+        #Concatenate all files
+        if (f==0):
+            dataOut=data_df
+            # startIndxOfFiles.append(data_df.shape[0])
+            labelsOut=labels
+            subjOut=['chb'+fn2[4:6]] * data_df.shape[0]
+            fileOut = [fn2] * data_df.shape[0]
+        else:
+            dataOut = pd.concat([dataOut, data_df])
+            # startIndxOfFiles.append(startIndxOfFiles[-1]+ data_df.shape[0])
+            labelsOut=np.concatenate((labelsOut, labels), axis=0)
+            subjOut = np.concatenate((subjOut, ['chb'+fn2[4:6]] * data_df.shape[0]), axis=0)
+            fileOut = np.concatenate((fileOut, [fn2] * data_df.shape[0]), axis=0)
+
+    #add Labels column to dataframe
+    dataOut.insert(0,'Labels',labelsOut.astype(int))
+    # add subject
+    dataOut.insert(0, 'Subject', subjOut)
+    dataOut.insert(1, 'FileName', fileOut)
+
+    #remove every 2nt row beceause here step was 0.5Hz
+    dataOut=dataOut.iloc[::2, :]
+    return (dataOut)
 
 def concatenateDataFromFilesWithLabels(dataset, fileNames, labelsFile):
     '''   Loads and concatenates data from all files in fileNames list and also adds labels from labelsFile with annotations.
@@ -463,8 +509,12 @@ def concatenateDataFromFilesWithLabels(dataset, fileNames, labelsFile):
         elif (dataset=='SIENA' or dataset=='siena' or dataset=='Siena'): #for siena dataset
             fn1 = fn.split('-')[0]+'-'+fn.split('-')[1]
             filePathToSearch=dir+'/'+fn1+'.edf'
+        elif (dataset=='SeizIT1'):
+            fn1 = fn.split('-')[0]
+            filePathToSearch = dir + '/' + fn1 + '.edf'
         try:
-            indx=np.array(filesList.index(filePathToSearch)).reshape((1,-1))
+            # indx=np.array(filesList.index(filePathToSearch)).reshape((1,-1))
+            indx=annotations_df.index[annotations_df['filepath'] == filePathToSearch].tolist()
         except:
             print('a')
 
@@ -474,12 +524,16 @@ def concatenateDataFromFilesWithLabels(dataset, fileNames, labelsFile):
         # Create labels for this file
         labels=np.zeros(data_df.shape[0])
         for i in indx:
-            i=i.squeeze()
+            # i=i.squeeze()
             if ('sz' in annotations_df.event[i]):
-                t1 = datetime.timedelta(seconds=int(annotations_df.startTime[i]))+ datetime.datetime.strptime(annotations_df.dateTime[i],  "%Y-%m-%d %H:%M:%S")
-                t2 = datetime.timedelta(seconds=int(annotations_df.endTime[i])) + datetime.datetime.strptime(annotations_df.dateTime[i],  "%Y-%m-%d %H:%M:%S")
+                try:
+                    t1 = datetime.timedelta(seconds=int(annotations_df.startTime[i])-1)+ datetime.datetime.strptime(annotations_df.dateTime[i],  "%Y-%m-%d %H:%M:%S")
+                    t2 = datetime.timedelta(seconds=int(annotations_df.endTime[i])-1) + datetime.datetime.strptime(annotations_df.dateTime[i],  "%Y-%m-%d %H:%M:%S")
+                except: #when there was no H,M and S in start of the file (e.g. in SeizIT)
+                    t1 = datetime.timedelta(seconds=int(annotations_df.startTime[i]) - 1) + datetime.datetime.strptime( annotations_df.dateTime[i], "%Y-%m-%d")
+                    t2 = datetime.timedelta(seconds=int(annotations_df.endTime[i]) - 1) + datetime.datetime.strptime(  annotations_df.dateTime[i], "%Y-%m-%d")
                 indxRangeNum=(data_df.Time>=t1).to_numpy()*1 + (data_df.Time>=t2).to_numpy()*1
-                indxsRange=np.where(indxRangeNum==1)
+                indxsRange=np.where(indxRangeNum==1)#[0:-1]
                 labels[indxsRange]=1
 
         #Concatenate all files
@@ -578,13 +632,13 @@ def train_StandardML_moreModelsPossible(X_train, y_train,  StandardMLParams):
     elif (StandardMLParams.modelType=='SVM'):
         model = svm.SVC(kernel=StandardMLParams.SVM_kernel, C=StandardMLParams.SVM_C, gamma=StandardMLParams.SVM_gamma)
         model.fit(X_train, y_train)
-    elif (StandardMLParams.modelType=='DecisionTree' or 'DT'):
+    elif (StandardMLParams.modelType=='DecisionTree' or StandardMLParams.modelType=='DT'):
         if (StandardMLParams.DecisionTree_max_depth==0):
             model = DecisionTreeClassifier(random_state=0, criterion=StandardMLParams.DecisionTree_criterion, splitter=StandardMLParams.DecisionTree_splitter)
         else:
             model = DecisionTreeClassifier(random_state=0, criterion=StandardMLParams.DecisionTree_criterion, splitter=StandardMLParams.DecisionTree_splitter,  max_depth=StandardMLParams.DecisionTree_max_depth)
         model = model.fit(X_train, y_train)
-    elif (StandardMLParams.modelType=='RandomForest' or 'RF'):
+    elif (StandardMLParams.modelType=='RandomForest' or StandardMLParams.modelType=='RF'):
         if (StandardMLParams.DecisionTree_max_depth == 0):
             model = RandomForestClassifier(random_state=0, n_estimators=StandardMLParams.RandomForest_n_estimators, criterion=StandardMLParams.DecisionTree_criterion ) #, min_samples_leaf=10
         else:
@@ -643,13 +697,13 @@ def test_StandardML_moreModelsPossible(data,trueLabels,  model):
     indx=np.where(y_pred==1)
     if (len(indx[0])!=0):
         y_probability_fin[indx]=y_probability[indx,1]
-    else:
-        print('no seiz predicted')
+    # else:
+    #     print('no seiz predicted')
     indx = np.where(y_pred == 0)
     if (len(indx[0])!=0):
         y_probability_fin[indx] = y_probability[indx,0]
-    else:
-        print('no non seiz predicted')
+    # else:
+    #     print('no non seiz predicted')
 
     #calculate accuracy
     diffLab=y_pred-trueLabels
@@ -783,10 +837,13 @@ def calculateKLDivergenceForFeatures(dataset, patients, folderFeatures, TrueAnno
             allFeatNames.sort()
             JSdiverg=np.zeros((len(patients),len(allFeatNames)))
         for fi, feat in enumerate(allFeatNames):
-            (SeizHist, nonSeizHist) = calcHistogramValues(dataFinal.loc[:,feat].to_numpy(), dataFinal.loc[:,'Labels'].to_numpy(),numBins)
-            # KLdiverg_NSS[patIndx, f] = kl_divergence(nonSeizHist[0],SeizHist[0])
-            JSdiverg[patIndx,fi] = js_divergence(nonSeizHist[0], SeizHist[0])
-
+            # print(feat)
+            if not np.isnan(np.sum(dataFinal.loc[:,feat].to_numpy())):
+                (SeizHist, nonSeizHist) = calcHistogramValues(dataFinal.loc[:,feat].to_numpy(), dataFinal.loc[:,'Labels'].to_numpy(),numBins)
+                # KLdiverg_NSS[patIndx, f] = kl_divergence(nonSeizHist[0],SeizHist[0])
+                JSdiverg[patIndx,fi] = js_divergence(nonSeizHist[0], SeizHist[0])
+            else:
+                JSdiverg[patIndx, fi] = np.nan
     #convert to DF
     JSdivergDF=pd.DataFrame(JSdiverg, columns=allFeatNames, index=patients)
     JSdivergDF.to_csv(folderFeaturesOut+'/JSdivergencePerSubjAndIndivFeature.csv', index=True)
@@ -814,11 +871,13 @@ def calculateKLDivergenceForFeatures(dataset, patients, folderFeatures, TrueAnno
     #PLOTTING
     # PLOTTING KL DIVERGENCE PER SUBJECT
     fig1 = plt.figure(figsize=(16, 16), constrained_layout=False)
-    gs = GridSpec(6, 4, figure=fig1)
+    numCols= int(np.ceil(np.sqrt(len(patients))))
+    numRows= int( np.ceil(len(patients) /numCols))
+    gs = GridSpec(numCols, numRows, figure=fig1)
     fig1.subplots_adjust(wspace=0.4, hspace=0.6)
     xValues = np.arange(0,len(FeaturesParams.allFeatNames), 1)
     for p, pat in enumerate(patients):
-        ax1 = fig1.add_subplot(gs[int(np.floor(p / 4)), np.mod(p, 4)])
+        ax1 = fig1.add_subplot(gs[int(np.floor(p / numRows)), np.mod(p, numRows)])
         ax1.errorbar(xValues, JSdivergPerSubj_Mean[p, :], yerr=JSdivergPerSubj_Std[p, :], fmt='b', label='JS')
         ax1.legend()
         ax1.set_xlabel('Feature')
@@ -847,6 +906,35 @@ def calculateKLDivergenceForFeatures(dataset, patients, folderFeatures, TrueAnno
     fig1.savefig(folderFeaturesOut + '/JSDivergence_AllSubj.png', bbox_inches='tight')
     plt.close(fig1)
 
+from imblearn.over_sampling import RandomOverSampler
+from imblearn.over_sampling import SMOTE
+
+from imblearn.under_sampling import RandomUnderSampler
+from imblearn.under_sampling import TomekLinks
+from imblearn.combine import SMOTEENN
+from imblearn.combine import SMOTETomek
+
+def datasetResample(X, y, resamplType, samplStrat='auto', randState=42): #'NoResampling','ROS','SMOTE', 'RUS','TomekLinks', 'SMOTEtomek', 'SMOTEENN
+    # OVERSAMPLING STRATEGIES
+    if (resamplType=='ROS'):
+        resampler = RandomOverSampler(sampling_strategy= samplStrat, random_state=randState) #sampling_strategy='minority'
+    elif (resamplType=='SMOTE'):
+        resampler = SMOTE(sampling_strategy= samplStrat, random_state=randState) #sampling_strategy='minority'
+    # elif (resamplType == 'KMeansSMOTE'):
+    #     sm = KMeansSMOTE( kmeans_estimator=MiniBatchKMeans(n_init=1, random_state=0), random_state=randState )
+    # UNDERSAMPLING STRATEGIES
+    elif (resamplType=='RUS'):
+        resampler = RandomUnderSampler(sampling_strategy= samplStrat, random_state=randState) #sampling_strategy='minority'
+    elif (resamplType=='TomekLinks'):
+        resampler = TomekLinks(sampling_strategy= samplStrat)
+    # UNDER-OVER SAMPLING STRATEGIES
+    elif (resamplType=='SMOTEtomek'):
+        resampler = SMOTETomek(sampling_strategy= samplStrat, random_state=42)
+    elif (resamplType=='SMOTEENN'):
+        resampler = SMOTEENN(sampling_strategy= samplStrat, random_state=42)
+
+    X_over, y_over = resampler.fit_resample(X, y)
+    return (X_over, y_over)
 
 def plotPredictionsMatchingInTime(trueLabels, predLabels, predLabels_MovAvrg, predLabels_Bayes,outName, PerformanceParams):
     ''' Plots predictions and true labels in time. Plots for raw predictions and two types of postprocessing (moving average and Bayes).
@@ -930,11 +1018,23 @@ def loadOneSubjData(dataset, pat, inputFolder, featNames,channelNamesToKeep, Tru
     '''
     dataOut = pd.DataFrame([])
     for fIndx, fName in enumerate(featNames):
+        # # # testing old features # TODO: OLD FEATURES
+        # outDirFeatures = '../../01_' + dataset + '/02_Features_1to30Hz_4_0.5/' #OLD FEATURES
+        # filesAll = np.sort( glob.glob(outDirFeatures + '/Subj' + pat[3:] + '*' + fName + '.parquet.gzip'))  # old features
+        # dataOut0 = concatenateDataFromFiles_oldFeatures(filesAll, TrueAnnotationsFile)
+        #
+        # print('-- Patient:', pat, 'NumSeizures:', len(filesAll))
+        # # concatenate for all features
+        # dataFixedCols = dataOut0[['Subject', 'FileName', 'Labels']]
+        # dataOut = pd.concat([dataOut, dataOut0.drop(['Subject', 'FileName', 'Labels'], axis=1)], axis=1)
+
+
         filesAll = np.sort(glob.glob(inputFolder + '/' + pat + '/*' + fName + '.parquet.gzip'))
-        print('-- Patient:', pat, 'NumSeizures:', len(filesAll))
         # load all files only once and mark where each file starts
         # (dataOut0, startIndxOfSubjects) = concatenateDataFromFiles(filesAll) # without labels
         dataOut0 = concatenateDataFromFilesWithLabels(dataset, filesAll, TrueAnnotationsFile)  # with labels
+
+        print('-- Patient:', pat, 'NumFiles:', len(filesAll))
         # concatenate for all features
         dataFixedCols = dataOut0[['Subject', 'FileName', 'Time', 'Labels']]
         dataOut = pd.concat([dataOut, dataOut0.drop(['Subject', 'FileName', 'Time', 'Labels'], axis=1)], axis=1)
@@ -943,7 +1043,7 @@ def loadOneSubjData(dataset, pat, inputFolder, featNames,channelNamesToKeep, Tru
     dataOutRear = pd.DataFrame([])
     colNames = dataOut.columns.to_list()
     for chIndx, ch in enumerate(channelNamesToKeep):
-        cn = [s for s in colNames if ch in s]
+        cn = [s for s in colNames if ch.lower() in s.lower()]
         dataOutRear = pd.concat([dataOutRear, dataOut[cn]], axis=1)
 
     # concatenate rearenged features with subject, fileName, time and labels columns
@@ -963,7 +1063,7 @@ def findMinNumHoursToTrain(data, minHours, stepInHours):
     labels=data['Labels'].to_numpy()
     startIndx = np.where(np.diff(labels) == 1)[0] + 1
     endIndx = np.where(np.diff(labels) == -1)[0] + 1
-    if (endIndx[0]< minHours*60*60): # seizure within first minHours of recordings
+    if (endIndx[0]< minHours*60*60): # is at least one seizure within first minHours of recordings
         minHoursOut=int(minHours/stepInHours)
     else:
         minHoursOut=int(np.ceil(endIndx[0]/(stepInHours*60*60)))
@@ -984,6 +1084,8 @@ def findMinNumHoursToTrain(data, minHours, stepInHours):
 #         if (s>= thrPerc):  #and prediction[i]==1
 #             smoothLabelsStep1[i]=1
 #     return  (smoothLabelsStep1)
+
+
 
 
 def movingAvrgSmoothing(data,  winLen, thrPerc):

@@ -6,6 +6,7 @@ class GeneralParams:
     patients=[]  #on which subjects to train and test
     PersCV_MinTrainHours=5 #minimum number of hours we need to start training in personal model
     PersCV_CVStepInHours=1 #how often we retrain and on how much next data we test
+    GenCV_numFolds=5
 
 ##############################################################################################
 #### PREPROCESSING PARAMETERS
@@ -17,7 +18,12 @@ class DatasetPreprocessParams: # mostly based on CHB-MIT dataset
     #Channels to keep - Bipolar channels
     channelNamesToKeep_Bipolar = ('Fp1-F3', 'F3-C3', 'C3-P3', 'P3-O1', 'Fp1-F7', 'F7-T3', 'T3-T5', 'T5-O1', 'Fz-Cz', 'Cz-Pz',
                        'Fp2-F4', 'F4-C4', 'C4-P4', 'P4-O2', 'Fp2-F8', 'F8-T4', 'T4-T6', 'T6-O2')
+    # channelNamesToKeep_Bipolar = ('Fp1-F3', 'F3-C3', 'C3-P3', 'P3-O1', 'Fp1-F7', 'F7-T7', 'T7-P7', 'P7-O1', 'Fz-Cz', 'Cz-Pz',
+    #                    'Fp2-F4', 'F4-C4', 'C4-P4', 'P4-O2', 'Fp2-F8', 'F8-T8', 'T8-P8', 'P8-O2') # TODO for old features
     channelNamesToKeep=channelNamesToKeep_Unipolar
+
+    # raw EEG data normalization
+    eegDataNormalization='' # '' for none, 'NormWithPercentile', or 'QuantileNormalization'
 
 ##############################################################################################
 #### FEATURES PARAMETERS
@@ -70,9 +76,12 @@ FeaturesParams.allFeatNames=constructAllfeatNames(FeaturesParams )
 class StandardMLParams:
 
     modelType='RF' #'KNN', 'SVM', 'DT', 'RF','BaggingClassifier','AdaBoost'
-    trainingDataResampling='NoResampling' #'NoResampling','ROS','RUS','TomekLinks','ClusterCentroids','SMOTE','SMOTEtomek'
-    traininDataResamplingRatio=0.2
-    samplingStrategy='default' # depends on resampling, but if 'default' then default for each resampling type, otherwise now implemented only for RUS if not default
+
+    # Data under/over sampling
+    trainingDataResampling='NoResampling' #'NoResampling','ROS','SMOTE', 'RUS','TomekLinks', 'SMOTEtomek', 'SMOTEENN
+    traininDataResamplingRatio='auto' #'auto', 0.2, 0.5
+    # samplingStrategy='default' # depends on resampling, but if 'default' then default for each resampling type, otherwise now implemented only for RUS if not default
+
     #KNN parameters
     KNN_n_neighbors=5
     KNN_metric='euclidean' #'euclidean', 'manhattan'

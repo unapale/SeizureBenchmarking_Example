@@ -9,6 +9,7 @@ Possible to use CHBMIT, Siena and SeizIT dataset.
 Two main scripts: 
 - `main_personal.py`: performs personal training using time series crossvalidation
 - `main_general.py`: performs general training using leave one subject output
+- `main_KFoldGeneral.py`: performs general training using K fold crossvalidation (needed for big datasets, e.g. SeizIT)
 
 ### ML models implemented (but not all tested)
 KNN, SVM, DT, RF, AdaBoost
