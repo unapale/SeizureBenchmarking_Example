@@ -58,13 +58,14 @@ os.makedirs(os.path.dirname(outPredictionsFolder), exist_ok=True)
 ## print(os.listdir('../../../../../'))
 
 #####################################################
-# STANDARTIZE DATASET - Only has to be done once
+# # STANDARTIZE DATASET - Only has to be done once
 # print('STANDARDIZING DATASET')
 # # .edf as output
 # if (dataset=='CHBMIT'):
-#     standardizeDataset(rootDir, outDir, origMontage='bipolar-dBanana')  # for CHBMIT
+#     # standardizeDataset(rootDir, outDir, origMontage='bipolar-dBanana')  # for CHBMIT
+#     standardizeDataset(rootDir, outDir, electrodes= DatasetPreprocessParams.channelNamesToKeep_Bipolar,  inputMontage=Montage.BIPOLAR,ref='bipolar-dBanana' )  # for CHBMIT
 # else:
-#     standardizeDataset(rootDir, outDir) #for all datasets that are unipolar (SeizIT and Siena)
+#     standardizeDataset(rootDir, outDir, ref=DatasetPreprocessParams.refElectrode) #for all datasets that are unipolar (SeizIT and Siena)
 
 #if we want to change output format
 # standardizeDataset(rootDir, outDir, outFormat='csv')

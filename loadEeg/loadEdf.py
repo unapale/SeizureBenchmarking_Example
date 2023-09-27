@@ -81,20 +81,66 @@ def _getChannelIndices(channels: list[str], electrodes: tuple[str] = ELECTRODES,
 
         # Regex on channel name
         if inputMontage == Montage.MONOPOLAR:
-            regExToFind = r'(EEG )?{}(-REF)?'.format(electrode)
+            regExToFind = r'(EEG )?{}(-REF)?'.format(electrode) #TODO: Jonathan could we make it without -REF i think it is too specific for SeizIT
+            actualMontage=inputMontage
         elif inputMontage == Montage.BIPOLAR:
             regExToFind = electrode[0] + r'.*(-)?.*' + electrode[1]
+            actualMontage = inputMontage
 
         # Find corresponding channel
         for i, channel in enumerate(channels):
             if re.search(regExToFind, channel, flags=re.IGNORECASE):
                 found = True
                 break
+
         if found:
-            chIndices.append(i)
-        else:
-            raise ValueError("Electrode {} was not found in EDF file".format(electrode))
-    return chIndices
+                chIndices.append(i)
+        # else:
+        #     # raise ValueError("Electrode {} was not found in EDF file".format(electrode))
+        #     print("Electrode {} was not found in EDF file".format(electrode))
+
+    # if not found, could be that it is expecting bipolar and actually channels are in unipolar
+    # e.g. this is in several cases in CHBIMT
+    if (len(chIndices) <= len(electrodes)):
+        chIndices = list()
+        for electrode in ELECTRODES:
+            found = False
+            electrode = _electrodeSynonymRegex(electrode)
+            regExToFind = electrode
+            actualMontage = Montage.MONOPOLAR
+            for i, channel in enumerate(channels):
+                if re.search(regExToFind, channel, flags=re.IGNORECASE):
+                    found = True
+                    break
+            if found:
+                chIndices.append(i)
+            # else:
+            #     # raise ValueError("Electrode {} was not found in EDF file".format(electrode))
+            #     print("Electrode {} was not found in EDF file".format(electrode))
+
+    if (len(chIndices)!= len(ELECTRODES)):
+        raise ValueError("Not all electrodes are found in EDF file")
+
+    return (chIndices, actualMontage)
+
+def createRerefereningMatrix(electrodes: tuple[str] = ELECTRODES):
+
+    """Creating rereferencing matrix to convert unipolar to bipolar channels
+    Only works for now with BIPOLAR_DBANANA organizations
+
+    Args:
+        electrodes (tuple[str]): list of electrodes to load. Defaults to the 19 electrodes of the 10-20 system.
+
+    Returns:
+        np.ndarray: 2D array of rereferencing matriy
+    """
+    # Create re-Referencing matrix
+    reRefMatrix = np.zeros((len(BIPOLAR_DBANANA), len(electrodes)))
+    for i, pair in enumerate(BIPOLAR_DBANANA):
+        elecs = pair.split('-')
+        reRefMatrix[i, electrodes.index(elecs[0])] = 1
+        reRefMatrix[i, electrodes.index(elecs[1])] = -1
+    return reRefMatrix
 
 
 def loadEdf(edfFile: str, electrodes: tuple[str] = ELECTRODES, targetFs: int = FS, inputMontage: Montage = Montage.MONOPOLAR,
@@ -119,7 +165,7 @@ def loadEdf(edfFile: str, electrodes: tuple[str] = ELECTRODES, targetFs: int = F
     with pyedflib.EdfReader(edfFile) as edf:
         # Get channel indices
         channels = edf.getSignalLabels()
-        chIndices = _getChannelIndices(channels, electrodes, inputMontage)
+        (chIndices, actualMontage) = _getChannelIndices(channels, electrodes, inputMontage)
 
         # Get Fs
         fs = edf.getSampleFrequencies()
@@ -139,14 +185,17 @@ def loadEdf(edfFile: str, electrodes: tuple[str] = ELECTRODES, targetFs: int = F
         if inputMontage == Montage.MONOPOLAR and ref in electrodes:
             refI = electrodes.index(ref)
             eegData -= eegData[refI]
-            # TODO add re-referencing to common average.
+
+        elif  inputMontage == Montage.MONOPOLAR and ref=='Avrg': # TODO check if this is correct
+            meanVal= np.nanmean(eegData,0)
+            eegData -= meanVal
         elif inputMontage == Montage.MONOPOLAR and ref == 'bipolar-dBanana':  # It was monopolar and needs to be bipolar
             # Create re-Referencing matrix
-            reRefMatrix = np.zeros((len(BIPOLAR_DBANANA), len(electrodes)))
-            for i, pair in enumerate(BIPOLAR_DBANANA):
-                elecs = pair.split('-')
-                reRefMatrix[i, electrodes.index(elecs[0])] = 1
-                reRefMatrix[i, electrodes.index(elecs[1])] = -1
+            reRefMatrix= createRerefereningMatrix(electrodes)
+            eegData = reRefMatrix @ eegData  # matrix multiplication
+        elif inputMontage == Montage.BIPOLAR and actualMontage == Montage.MONOPOLAR :  # it was bipolar in general, but this file had extraordinarily unipolar recording
+            # Create re-Referencing matrix
+            reRefMatrix= createRerefereningMatrix(ELECTRODES) #pass monopolar electrodes
             eegData = reRefMatrix @ eegData  # matrix multiplication
         elif inputMontage == Montage.BIPOLAR and ref == 'bipolar-dBanana' and electrodes == BIPOLAR_DBANANA:
             # Currently only supports loading bipolar data if target is bipolar-dBanana.
@@ -183,7 +232,7 @@ def standardizeFileToEdf(edfFile: str, outFile: str, electrodes: tuple[str] = EL
     with pyedflib.EdfReader(edfFile) as edf:
         # Get channel indices
         channels = edf.getSignalLabels()
-        chIndices = _getChannelIndices(channels, electrodes, inputMontage)
+        (chIndices, actualMontage)  = _getChannelIndices(channels, electrodes, inputMontage)
 
         # rename original headers from edf files to update sample frequency and channel names
         signalHeaders = list()

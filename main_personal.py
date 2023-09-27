@@ -8,7 +8,7 @@ import os
 # SIENA DATASET
 dataset='SIENA'
 rootDir=  '../../../../../scratch/dan/physionet.org/files/siena-scalp-eeg/1.0.0' #when running from putty
-# rootDir=  '../../../../../shares/eslfiler1/scratch/dan/physionet.org/files/siena-scalp-eeg/1.0.0' #when running from remote desktop
+rootDir=  '../../../../../shares/eslfiler1/scratch/dan/physionet.org/files/siena-scalp-eeg/1.0.0' #when running from remote desktop
 DatasetPreprocessParams.channelNamesToKeep=DatasetPreprocessParams.channelNamesToKeep_Unipolar
 GeneralParams.PersCV_MinTrainHours = 1
 GeneralParams.PersCV_CVStepInHours = 0.5
@@ -66,14 +66,14 @@ print(os.path.exists(rootDir))
 # print(os.listdir('../../../../../'))
 
 ####################################################
-# STANDARTIZE DATASET - Only has to be done once
-print('STANDARDIZING DATASET')
-# .edf as output
-if (dataset=='CHBMIT'):
-    # standardizeDataset(rootDir, outDir, origMontage='bipolar-dBanana')  # for CHBMIT
-    standardizeDataset(rootDir, outDir, electrodes= DatasetPreprocessParams.channelNamesToKeep_Bipolar,  inputMontage=Montage.BIPOLAR,ref='bipolar-dBanana' )  # for CHBMIT
-else:
-    standardizeDataset(rootDir, outDir) #for all datasets that are unipolar (SeizIT and Siena)
+# # STANDARTIZE DATASET - Only has to be done once
+# print('STANDARDIZING DATASET')
+# # .edf as output
+# if (dataset=='CHBMIT'):
+#     # standardizeDataset(rootDir, outDir, origMontage='bipolar-dBanana')  # for CHBMIT
+#     standardizeDataset(rootDir, outDir, electrodes= DatasetPreprocessParams.channelNamesToKeep_Bipolar,  inputMontage=Montage.BIPOLAR,ref='bipolar-dBanana' )  # for CHBMIT
+# else:
+#     standardizeDataset(rootDir, outDir, ref=DatasetPreprocessParams.refElectrode) #for all datasets that are unipolar (SeizIT and Siena)
 
 # #if we want to change output format
 # standardizeDataset(rootDir, outDir, outFormat='csv')
