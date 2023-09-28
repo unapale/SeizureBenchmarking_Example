@@ -49,6 +49,8 @@ def _electrodeSynonymRegex(electrode: str) -> str:
         electrode = '(T5|P7)'
     elif electrode == 'T6' or electrode == 'P8':
         electrode = '(T6|P8)'
+    elif electrode == 'O1':
+        electrode = '(O1|01)'
 
     return electrode
 
